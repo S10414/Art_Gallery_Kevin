@@ -143,14 +143,16 @@ var fade=$('#fade');
 if(!window.THREE){fade.textContent='3D 函式庫載入失敗，請重新整理';return;}
 
 /* ---------- constants ---------- */
-var W=12,H=6.4,RISE=2.7,ZF=20,ZB=-22,EYE=1.65;
-var AR=2.3,ASP=3.9,AW=7.4,AD=8.5,AH=7.6; // arch half-width, arch springing height, apse width/depth/height
+var W=8,H=6.4,RISE=2.3,ZF=20,ZB=-22,EYE=1.65;
+var AR=1.9,ASP=3.7,AW=6.2,AD=8.5,AH=7.4;
+var DOORZ=-12,DOORHW=1.2,DOORSP=2.7,WINZ=[8,-4]; // opening to the outside and the tall windows, all on the left (sunny) wall
+// // arch half-width, arch springing height, apse width/depth/height
 var SLOTS=[
-  {wall:'L',z:12},{wall:'R',z:8},{wall:'L',z:4},{wall:'R',z:0},
-  {wall:'L',z:-4},{wall:'R',z:-8},{wall:'L',z:-12},{wall:'R',z:-16},{wall:'E',z:ZB-AD}
+  {wall:'L',z:16},{wall:'L',z:12},{wall:'R',z:12},{wall:'R',z:8},{wall:'L',z:4},{wall:'L',z:0},
+  {wall:'R',z:0},{wall:'R',z:-4},{wall:'L',z:-8},{wall:'R',z:-12},{wall:'R',z:-16},{wall:'E',z:ZB-AD}
 ];
 var N=SLOTS.length;
-var DEF_DESC='這是預設的示範畫面。點「更換作品」上傳你自己的圖片，並填上標題、作者與介紹，它就會掛在這個畫框裡。';
+var DEF_DESC=(window.GALLERY_CONFIG&&window.GALLERY_CONFIG.supabaseUrl)?'這個畫框還在等一件作品，目前掛的是示範畫面。':'這是預設的示範畫面。點「更換作品」上傳你自己的圖片，並填上標題、作者與介紹，它就會掛在這個畫框裡。';
 
 /* ---------- renderer / scene ---------- */
 var canvas=$('#gl');
@@ -169,54 +171,99 @@ var maxAniso=renderer.capabilities.getMaxAnisotropy();
 function tex(src){var t=new THREE.Texture(src);t.encoding=THREE.sRGBEncoding;t.anisotropy=maxAniso;t.needsUpdate=true;return t;}
 function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
 
-/* ---------- room: tall classical nave with barrel vault, pilasters, arched windows and an apse ---------- */
+/* ---------- room: tall nave lit from the left, with pilasters, an opening to the outside and an apse ---------- */
 (function buildRoom(){
-  var len=ZF-ZB, cz=(ZF+ZB)/2, DADO=1.0;
+  var len=ZF-ZB, cz=(ZF+ZB)/2, DADO=1.0, WY0=1.25, WH=4.5, WHW=1.15;
   var wallM=new THREE.MeshLambertMaterial({color:0xe9e6df,side:THREE.DoubleSide});
   var trim=new THREE.MeshLambertMaterial({color:0xfaf8f3}), gold=new THREE.MeshLambertMaterial({color:0xa9843f});
   var dark=new THREE.MeshLambertMaterial({color:0x3a2a1c}), lamp=new THREE.MeshBasicMaterial({color:0xfffdf5});
+  var shade=new THREE.MeshLambertMaterial({color:0xc9c6c0});
   function box(m,w,h,d,x,y,z){var o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.position.set(x,y,z);scene.add(o);return o;}
   function plane(m,w,h,x,y,z,ry,rx){var o=new THREE.Mesh(new THREE.PlaneGeometry(w,h),m);o.position.set(x,y,z);if(ry)o.rotation.y=ry;if(rx)o.rotation.x=rx;scene.add(o);return o;}
   function canvas(w,h){var c=document.createElement('canvas');c.width=w;c.height=h;return c;}
 
-  // --- textures ---
-  // old, worn wood floor
-  var c=canvas(512,512),g=c.getContext('2d'),r=mulberry(7),i,k,x,y;
-  g.fillStyle='#3b2c20';g.fillRect(0,0,512,512);
-  for(i=0;i<8;i++){
-    x=i*64;var off=Math.floor(r()*512);
-    for(y=-512;y<512;y+=256){g.fillStyle='hsl('+(22+r()*8)+','+(20+r()*10)+'%,'+(21+r()*9)+'%)';g.fillRect(x+1,y+off,62,253);}
-    g.fillStyle='rgba(10,6,3,.7)';g.fillRect(x,0,2,512);
+  // --- weathered plank floor: uneven widths, grey-brown, worn pale down the middle of each board ---
+  var c=canvas(1024,1024),g=c.getContext('2d'),r=mulberry(11),i,k,x,y;
+  g.fillStyle='#2a211a';g.fillRect(0,0,1024,1024);
+  x=0;
+  while(x<1024){
+    var pw=Math.min(58+Math.floor(r()*56),1024-x);if(1024-x-pw<40)pw=1024-x;
+    var hue=24+r()*10,sat=10+r()*14,lig=27+r()*13,joint=Math.floor(r()*1024),two=r()>0.45;
+    for(var part=0;part<(two?2:1);part++){
+      var y0=part?joint:0,y1=two?(part?1024:joint):1024,l2=lig+(part?(r()-0.5)*8:0);
+      g.fillStyle='hsl('+hue+','+sat+'%,'+l2+'%)';g.fillRect(x+2,y0+(part?2:0),pw-3,y1-y0-(two?2:0));
+      var wg=g.createLinearGradient(x,0,x+pw,0);wg.addColorStop(0,'rgba(0,0,0,.28)');wg.addColorStop(.18,'rgba(225,205,175,.05)');
+      wg.addColorStop(.5,'rgba(232,214,186,'+(0.08+r()*0.14)+')');wg.addColorStop(.85,'rgba(225,205,175,.04)');wg.addColorStop(1,'rgba(0,0,0,.3)');
+      g.fillStyle=wg;g.fillRect(x+2,y0,pw-3,y1-y0);
+    }
+    for(k=0;k<pw*1.6;k++){var gx=x+2+r()*(pw-4),gy=r()*1024,gl=40+r()*240;
+      g.fillStyle='rgba('+(r()>.5?'238,222,196':'18,11,6')+','+(0.03+r()*0.09)+')';g.fillRect(gx,gy,1+(r()>.9?1:0),gl);}
+    for(k=0;k<3;k++){var ny=r()*1024;g.fillStyle='rgba(12,8,5,.55)';g.fillRect(x+7,ny,3,3);g.fillRect(x+pw-10,ny,3,3);}
+    g.fillStyle='rgba(8,5,3,.9)';g.fillRect(x,0,2,1024);
+    x+=pw;
   }
-  for(k=0;k<2600;k++){g.fillStyle='rgba('+(r()>.55?'230,205,170':'15,8,4')+','+(r()*0.07)+')';g.fillRect(r()*512,r()*512,1,16+r()*90);}
-  for(k=0;k<26;k++){g.fillStyle='rgba(235,220,195,'+(0.02+r()*0.035)+')';g.beginPath();g.ellipse(r()*512,r()*512,30+r()*70,14+r()*30,r()*3,0,7);g.fill();}
-  function floorTex(w,l){var t=tex(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(w/3.2,l/3.2);return t;}
-  // dark plank wainscot
-  var cw=canvas(256,256),gw=cw.getContext('2d');r=mulberry(21);
-  for(i=0;i<8;i++){gw.fillStyle='hsl('+(22+r()*6)+','+(22+r()*8)+'%,'+(15+r()*7)+'%)';gw.fillRect(i*32,0,32,256);gw.fillStyle='rgba(0,0,0,.55)';gw.fillRect(i*32,0,2,256);}
-  for(k=0;k<900;k++){gw.fillStyle='rgba('+(r()>.5?'210,180,140':'0,0,0')+','+(r()*0.08)+')';gw.fillRect(r()*256,r()*256,1,10+r()*60);}
-  function dadoMat(l){var t=tex(cw);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(l/1.3,1);return new THREE.MeshLambertMaterial({map:t});}
-  // arched window, daylight behind grey-white glazing bars
-  var cwin=canvas(384,768),gn=cwin.getContext('2d'),R=176,cx=192,sp=200;
-  function archPath(){gn.beginPath();gn.moveTo(cx-R,760);gn.lineTo(cx-R,sp);gn.arc(cx,sp,R,Math.PI,0,false);gn.lineTo(cx+R,760);gn.closePath();}
-  archPath();var gg=gn.createLinearGradient(0,0,0,768);gg.addColorStop(0,'#ffffff');gg.addColorStop(1,'#f4f7f9');gn.fillStyle=gg;gn.fill();
-  gn.save();archPath();gn.clip();gn.strokeStyle='#cfd0cc';gn.lineCap='butt';
-  gn.lineWidth=16;gn.beginPath();gn.moveTo(cx,sp+4);gn.lineTo(cx,768);gn.moveTo(0,sp+8);gn.lineTo(384,sp+8);gn.stroke();
-  gn.lineWidth=8;gn.beginPath();[cx-R/2-6,cx+R/2+6].forEach(function(vx){gn.moveTo(vx,sp);gn.lineTo(vx,768);});
-  for(y=sp+140;y<760;y+=140){gn.moveTo(0,y);gn.lineTo(384,y);}
-  gn.moveTo(cx+96,sp);gn.arc(cx,sp,96,0,Math.PI,true);
-  for(k=1;k<6;k++){var an=Math.PI*k/6;gn.moveTo(cx-Math.cos(an)*96,sp-Math.sin(an)*96);gn.lineTo(cx-Math.cos(an)*R,sp-Math.sin(an)*R);}
-  gn.stroke();gn.restore();
-  gn.lineWidth=14;gn.strokeStyle='#f1eee7';archPath();gn.stroke();
+  for(k=0;k<70;k++){var bx=r()*1024,by=r()*1024,rx=40+r()*150,ry=20+r()*70,bg=g.createRadialGradient(bx,by,0,bx,by,rx);
+    var pale=r()>.4;bg.addColorStop(0,pale?'rgba(226,208,180,.13)':'rgba(20,13,8,.2)');bg.addColorStop(1,'rgba(0,0,0,0)');
+    g.save();g.translate(bx,by);g.scale(ry/rx,1);g.translate(-bx,-by);g.fillStyle=bg;g.fillRect(bx-rx,by-rx,rx*2,rx*2);g.restore();}
+  function floorMat(w,l){var t=tex(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(w/3.6,l/3.6);return new THREE.MeshPhongMaterial({map:t,shininess:18,specular:0x2a241c});}
+  // --- dark panelled wainscot ---
+  var cw=canvas(512,256),gw=cw.getContext('2d');r=mulberry(21);
+  for(i=0;i<16;i++){gw.fillStyle='hsl('+(22+r()*8)+','+(18+r()*10)+'%,'+(14+r()*8)+'%)';gw.fillRect(i*32,0,32,256);gw.fillStyle='rgba(0,0,0,.5)';gw.fillRect(i*32,0,2,256);}
+  for(k=0;k<2400;k++){gw.fillStyle='rgba('+(r()>.5?'215,188,150':'0,0,0')+','+(r()*0.09)+')';gw.fillRect(r()*512,r()*256,1,10+r()*70);}
+  [[26,34,460,188]].forEach(function(q){ // one recessed panel per repeat
+    gw.fillStyle='rgba(0,0,0,.2)';gw.fillRect(q[0],q[1],q[2],q[3]);
+    gw.fillStyle='rgba(0,0,0,.6)';gw.fillRect(q[0],q[1],q[2],7);gw.fillRect(q[0],q[1],7,q[3]);
+    gw.fillStyle='rgba(225,200,160,.22)';gw.fillRect(q[0],q[1]+q[3]-6,q[2],6);gw.fillRect(q[0]+q[2]-6,q[1],6,q[3]);});
+  gw.fillStyle='rgba(0,0,0,.45)';gw.fillRect(0,0,512,10);gw.fillStyle='rgba(225,200,160,.14)';gw.fillRect(0,10,512,3);
+  function dadoMat(l){var t=tex(cw);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(Math.max(1,Math.round(l/2)),1);return new THREE.MeshLambertMaterial({map:t});}
+  // --- arched window + the pool of sun it throws ---
+  var R=176,cx=192,sp=200;
+  function archPath(gn){gn.beginPath();gn.moveTo(cx-R,768);gn.lineTo(cx-R,sp);gn.arc(cx,sp,R,Math.PI,0,false);gn.lineTo(cx+R,768);gn.closePath();}
+  function bars(gn,scale){gn.lineCap='butt';
+    gn.lineWidth=16*scale;gn.beginPath();gn.moveTo(cx,sp+4);gn.lineTo(cx,768);gn.moveTo(0,sp+8);gn.lineTo(384,sp+8);gn.stroke();
+    gn.lineWidth=8*scale;gn.beginPath();[cx-R/2-6,cx+R/2+6].forEach(function(vx){gn.moveTo(vx,sp);gn.lineTo(vx,768);});
+    for(var yy=sp+140;yy<760;yy+=140){gn.moveTo(0,yy);gn.lineTo(384,yy);}
+    gn.moveTo(cx+96,sp);gn.arc(cx,sp,96,0,Math.PI,true);
+    for(var q=1;q<6;q++){var an=Math.PI*q/6;gn.moveTo(cx-Math.cos(an)*96,sp-Math.sin(an)*96);gn.lineTo(cx-Math.cos(an)*R,sp-Math.sin(an)*R);}
+    gn.stroke();}
+  var cwin=canvas(384,768),gn=cwin.getContext('2d');
+  archPath(gn);var gg=gn.createLinearGradient(0,0,0,768);gg.addColorStop(0,'#ffffff');gg.addColorStop(1,'#f6f8f9');gn.fillStyle=gg;gn.fill();
+  gn.save();archPath(gn);gn.clip();gn.strokeStyle='#cfd0cc';bars(gn,1);gn.restore();
+  gn.lineWidth=14;gn.strokeStyle='#f1eee7';archPath(gn);gn.stroke();
   var winM=new THREE.MeshBasicMaterial({map:tex(cwin),transparent:true,alphaTest:0.5});
-  // skylight glazing
+  function sunTex(withBars){var cv=canvas(384,768),q=cv.getContext('2d'),tmp=canvas(384,768),t=tmp.getContext('2d');
+    archPath(t);t.fillStyle='rgb(255,236,205)';t.fill();
+    if(withBars){t.globalCompositeOperation='destination-out';t.strokeStyle='#000';t.save();archPath(t);t.clip();bars(t,1.5);t.restore();}
+    if('filter' in q)q.filter='blur(7px)';q.drawImage(tmp,12,12,360,744);return tex(cv);}
+  var KX=0.62,KZ=-0.34; // metres the light travels across (x) and along (z) the floor per metre it falls
+  function sunPatch(zc,hw,y0,y1,t,op){
+    function P(z,yy){return [-W/2+yy*KX,0.008,z+yy*KZ];}
+    var a=P(zc+hw,y0),b=P(zc-hw,y0),cc=P(zc-hw,y1),d=P(zc+hw,y1),geo=new THREE.BufferGeometry();
+    geo.setAttribute('position',new THREE.Float32BufferAttribute(a.concat(b,cc,d),3));
+    geo.setAttribute('uv',new THREE.Float32BufferAttribute([0,0,1,0,1,1,0,1],2));geo.setIndex([0,1,2,0,2,3]);
+    scene.add(new THREE.Mesh(geo,new THREE.MeshBasicMaterial({map:t,transparent:true,opacity:op,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide,fog:false})));
+  }
+  var sunBars=sunTex(true),sunOpen=sunTex(false);
+  // --- skylight glazing ---
   var cs=canvas(256,256),gs=cs.getContext('2d');gs.fillStyle='#ffffff';gs.fillRect(0,0,256,256);gs.strokeStyle='#d9dad6';gs.lineWidth=8;
   gs.strokeRect(0,0,256,256);gs.lineWidth=4;gs.beginPath();gs.moveTo(128,0);gs.lineTo(128,256);gs.moveTo(0,128);gs.lineTo(256,128);gs.stroke();
 
-  // --- floor, side walls ---
-  var floor=new THREE.Mesh(new THREE.PlaneGeometry(W,len),new THREE.MeshPhongMaterial({map:floorTex(W,len),shininess:26,specular:0x3a3026}));
+  // --- floor and side walls (the left wall has the doorway cut out of it) ---
+  var floor=new THREE.Mesh(new THREE.PlaneGeometry(W,len),floorMat(W,len));
   floor.rotation.x=-Math.PI/2;floor.position.set(0,0.002,cz);scene.add(floor);
-  plane(wallM,len,H,-W/2,H/2,cz,Math.PI/2);plane(wallM,len,H,W/2,H/2,cz,-Math.PI/2);
+  plane(wallM,len,H,W/2,H/2,cz,-Math.PI/2);
+  function doorPath(o,grow){var hw=DOORHW+grow;o.moveTo(-DOORZ-hw,0);o.lineTo(-DOORZ-hw,DOORSP);o.absarc(-DOORZ,DOORSP,hw,Math.PI,0,true);o.lineTo(-DOORZ+hw,0);}
+  var ls=new THREE.Shape();ls.moveTo(-ZF,0);ls.lineTo(-ZB,0);ls.lineTo(-ZB,H);ls.lineTo(-ZF,H);ls.lineTo(-ZF,0);
+  var dh=new THREE.Path();doorPath(dh,0);dh.lineTo(-DOORZ-DOORHW,0);ls.holes.push(dh);
+  var lw=new THREE.Mesh(new THREE.ShapeGeometry(ls,32),wallM);lw.rotation.y=Math.PI/2;lw.position.set(-W/2,0,0);scene.add(lw);
+  function doorRing(grow,depth,m,x){var sh=new THREE.Shape();doorPath(sh,grow);sh.lineTo(-DOORZ+DOORHW,0);
+    sh.lineTo(-DOORZ+DOORHW,DOORSP);sh.absarc(-DOORZ,DOORSP,DOORHW,0,Math.PI,false);sh.lineTo(-DOORZ-DOORHW,0);sh.lineTo(-DOORZ-DOORHW-grow,0);
+    var o=new THREE.Mesh(new THREE.ExtrudeGeometry(sh,{depth:depth,bevelEnabled:false,curveSegments:28}),m);o.rotation.y=Math.PI/2;o.position.set(x,0,0);scene.add(o);}
+  doorRing(0.5,0.85,shade,-W/2-0.85);          // deep shaded reveal
+  doorRing(0.2,0.07,trim,-W/2);                 // moulding on the hall side
+  var outside=new THREE.Mesh(new THREE.PlaneGeometry(4.4,5.2),new THREE.MeshBasicMaterial({color:0xffffff,fog:false}));
+  outside.rotation.y=Math.PI/2;outside.position.set(-W/2-0.86,2.6,DOORZ);scene.add(outside);
+  var sill=new THREE.Mesh(new THREE.PlaneGeometry(0.9,DOORHW*2),floorMat(0.9,DOORHW*2));sill.rotation.x=-Math.PI/2;sill.position.set(-W/2-0.43,0.003,DOORZ);scene.add(sill);
 
   // --- end walls with lunettes; the far one has an archway into the apse ---
   function endShape(hole){
@@ -226,11 +273,9 @@ function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a
   }
   var back=new THREE.Mesh(endShape(true),wallM);back.position.set(0,0,ZB);scene.add(back);
   var front=new THREE.Mesh(endShape(false),wallM);front.position.set(0,0,ZF);front.rotation.y=Math.PI;scene.add(front);
-  // moulded surround of the archway (both faces + reveal)
   var ring=new THREE.Shape();ring.moveTo(-AR-0.32,0);ring.lineTo(-AR-0.32,ASP);ring.absarc(0,ASP,AR+0.32,Math.PI,0,true);ring.lineTo(AR+0.32,0);ring.lineTo(AR,0);
   ring.lineTo(AR,ASP);ring.absarc(0,ASP,AR,0,Math.PI,false);ring.lineTo(-AR,0);ring.lineTo(-AR-0.32,0);
   var arch=new THREE.Mesh(new THREE.ExtrudeGeometry(ring,{depth:0.5,bevelEnabled:false,curveSegments:32}),trim);arch.position.set(0,0,ZB-0.25);scene.add(arch);
-  plane(winM,2.7,5.2,0,1.25+2.6,ZF-0.02,Math.PI); // tall window over the entrance
 
   // --- barrel vault, ribs and skylight ---
   function arcStrip(a0,a1,z0,z1,rad,rise,seg,uRep,vRep){
@@ -241,66 +286,61 @@ function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a
     var geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));geo.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));
     geo.setIndex(idx);geo.computeVertexNormals();return geo;
   }
-  var vaultM=new THREE.MeshLambertMaterial({color:0xf3f1ec,side:THREE.DoubleSide});
-  scene.add(new THREE.Mesh(arcStrip(0,Math.PI,ZB,ZF,W/2,RISE,40,1,1),vaultM));
+  scene.add(new THREE.Mesh(arcStrip(0,Math.PI,ZB,ZF,W/2,RISE,40,1,1),new THREE.MeshLambertMaterial({color:0xf3f1ec,side:THREE.DoubleSide})));
   var st=tex(cs);st.wrapS=st.wrapT=THREE.RepeatWrapping;
-  var A0=Math.PI*0.36,A1=Math.PI*0.64;
-  scene.add(new THREE.Mesh(arcStrip(A0,A1,ZB+1,ZF-1,W/2-0.05,RISE-0.03,12,3,(len-2)/1.25),new THREE.MeshBasicMaterial({map:st,side:THREE.DoubleSide})));
+  var A0=Math.PI*0.34,A1=Math.PI*0.66;
+  scene.add(new THREE.Mesh(arcStrip(A0,A1,ZB+1,ZF-1,W/2-0.05,RISE-0.03,12,3,(len-2)/1.1),new THREE.MeshBasicMaterial({map:st,side:THREE.DoubleSide})));
   var ribM=new THREE.MeshLambertMaterial({color:0xfaf8f3,side:THREE.DoubleSide});
-  [A0,A1].forEach(function(a){var px=-(W/2-0.1)*Math.cos(a),py=H+(RISE-0.08)*Math.sin(a);box(trim,0.16,0.16,len-2,px,py,cz);});
+  [A0,A1].forEach(function(a){box(trim,0.14,0.14,len-2,-(W/2-0.1)*Math.cos(a),H+(RISE-0.08)*Math.sin(a),cz);});
   var BAYS=[];for(var z=ZB+4;z<=ZF-2;z+=4)BAYS.push(z);            // pilaster lines: -18 … 18
-  BAYS.forEach(function(z){
-    scene.add(new THREE.Mesh(arcStrip(0,Math.PI,z-0.2,z+0.2,W/2-0.16,RISE-0.14,40,1,1),ribM));
-  });
+  BAYS.forEach(function(z){scene.add(new THREE.Mesh(arcStrip(0,Math.PI,z-0.2,z+0.2,W/2-0.14,RISE-0.12,40,1,1),ribM));});
 
-  // --- side walls: wainscot, cornice, pilasters, sconces, arched windows ---
-  var dM=dadoMat(len);
+  // --- side walls: wainscot, cornice, pilasters, sconces ---
+  function dadoRun(sd,z0,z1){var l=z1-z0,m=(z0+z1)/2,wx=sd*W/2;
+    box(dadoMat(l),0.05,DADO,l,wx-sd*0.025,DADO/2,m);box(dark,0.09,0.06,l,wx-sd*0.045,DADO+0.03,m);box(dark,0.08,0.14,l,wx-sd*0.04,0.07,m);}
+  dadoRun(1,ZB,ZF);dadoRun(-1,ZB,DOORZ-DOORHW-0.2);dadoRun(-1,DOORZ+DOORHW+0.2,ZF);
+  [-1,1].forEach(function(dz){var zz=DOORZ+dz*(DOORHW+0.025);box(dark,0.9,DADO,0.05,-W/2-0.4,DADO/2,zz);box(dark,0.9,0.06,0.09,-W/2-0.4,DADO+0.03,zz);}); // wainscot returns into the doorway
   [-1,1].forEach(function(sd){
     var wx=sd*W/2;
-    box(dM,0.05,DADO,len,wx-sd*0.025,DADO/2,cz);
-    box(dark,0.09,0.06,len,wx-sd*0.045,DADO+0.03,cz);
-    box(dark,0.08,0.14,len,wx-sd*0.04,0.07,cz);
     box(trim,0.26,0.16,len,wx-sd*0.13,H-0.08,cz);box(trim,0.16,0.14,len,wx-sd*0.08,H-0.23,cz);box(trim,0.08,0.1,len,wx-sd*0.04,H-0.35,cz);
     BAYS.forEach(function(z){
-      var px=wx-sd*0.09;
-      box(trim,0.18,H-0.9,0.62,px,0.45+(H-0.9)/2,z);                         // shaft
-      box(trim,0.26,0.3,0.74,wx-sd*0.13,0.45,z);box(trim,0.32,0.3,0.84,wx-sd*0.16,0.15,z); // stepped plinth
-      box(dark,0.3,0.22,0.78,wx-sd*0.15,H-0.56,z);box(dark,0.38,0.14,0.9,wx-sd*0.19,H-0.4,z); // dark timber capital
-      var gx=wx-sd*0.185,y0=0.85,y1=H-0.95;                                    // gilt inset panel line
+      box(trim,0.18,H-0.9,0.62,wx-sd*0.09,0.45+(H-0.9)/2,z);
+      box(trim,0.26,0.3,0.74,wx-sd*0.13,0.45,z);box(trim,0.32,0.3,0.84,wx-sd*0.16,0.15,z);
+      box(dark,0.3,0.22,0.78,wx-sd*0.15,H-0.56,z);box(dark,0.38,0.14,0.9,wx-sd*0.19,H-0.4,z);
+      var gx=wx-sd*0.185,y0=0.85,y1=H-0.95;
       box(gold,0.012,y1-y0,0.03,gx,(y0+y1)/2,z-0.2);box(gold,0.012,y1-y0,0.03,gx,(y0+y1)/2,z+0.2);
       box(gold,0.012,0.03,0.43,gx,y0,z);box(gold,0.012,0.03,0.43,gx,y1,z);
-      box(dark,0.2,0.1,0.1,wx-sd*0.28,3.55,z);box(dark,0.06,0.3,0.12,wx-sd*0.21,3.5,z);box(lamp,0.2,0.3,0.2,wx-sd*0.36,3.78,z); // sconce
+      box(dark,0.2,0.1,0.1,wx-sd*0.28,3.55,z);box(dark,0.06,0.3,0.12,wx-sd*0.21,3.5,z);box(lamp,0.2,0.3,0.2,wx-sd*0.36,3.78,z);
     });
-    // windows fill the bays that hold no painting
-    var used={};SLOTS.forEach(function(s){if((s.wall==='L'&&sd<0)||(s.wall==='R'&&sd>0))used[s.z]=1;});
-    for(var bz=ZB+2;bz<ZF;bz+=4){if(used[bz])continue;plane(winM,2.3,4.5,wx-sd*0.012,1.25+2.25,bz,sd<0?Math.PI/2:-Math.PI/2);
-      box(trim,0.12,0.08,2.5,wx-sd*0.06,1.22,bz);}
   });
+  // tall windows on the sunny wall only, each with its pool of light; the doorway throws a bigger one
+  WINZ.forEach(function(wz){plane(winM,WHW*2,WH,-W/2+0.012,WY0+WH/2,wz,Math.PI/2);box(trim,0.12,0.08,WHW*2+0.2,-W/2+0.06,WY0-0.03,wz);
+    sunPatch(wz,WHW*0.94,WY0+0.05,WY0+WH-0.05,sunBars,0.85);});
+  sunPatch(DOORZ,DOORHW,0,DOORSP+DOORHW,sunOpen,0.95);
   box(trim,W,0.16,0.26,0,H-0.08,ZF-0.13);box(trim,W,0.16,0.26,0,H-0.08,ZB+0.13);
   [-1,1].forEach(function(sd){var l=(W/2-AR-0.32),x=sd*(AR+0.32+l/2);box(dadoMat(l),l,DADO,0.05,x,DADO/2,ZB+0.03);box(dark,l,0.06,0.09,x,DADO+0.03,ZB+0.05);
     var l2=(AW/2-AR-0.32),x2=sd*(AR+0.32+l2/2);box(dadoMat(l2),l2,DADO,0.05,x2,DADO/2,ZB-0.03);box(dark,l2,0.06,0.09,x2,DADO+0.03,ZB-0.05);});
   box(dadoMat(W),W,DADO,0.05,0,DADO/2,ZF-0.025);box(dark,W,0.06,0.09,0,DADO+0.03,ZF-0.045);
 
-  // --- apse beyond the archway: brighter, with windows, so the hall reads as continuing ---
+  // --- apse beyond the archway, also lit from the left ---
   var az=ZB-AD/2,aEnd=ZB-AD;
-  var af=new THREE.Mesh(new THREE.PlaneGeometry(AW,AD),new THREE.MeshPhongMaterial({map:floorTex(AW,AD),shininess:26,specular:0x3a3026}));
-  af.rotation.x=-Math.PI/2;af.position.set(0,0.002,az);scene.add(af);
+  var af=new THREE.Mesh(new THREE.PlaneGeometry(AW,AD),floorMat(AW,AD));af.rotation.x=-Math.PI/2;af.position.set(0,0.002,az);scene.add(af);
   var apM=new THREE.MeshLambertMaterial({color:0xf2efe9});
   plane(apM,AD,AH,-AW/2,AH/2,az,Math.PI/2);plane(apM,AD,AH,AW/2,AH/2,az,-Math.PI/2);plane(apM,AW,AH,0,AH/2,aEnd,0);
   plane(new THREE.MeshLambertMaterial({color:0xf8f6f1}),AW,AD,0,AH,az,0,Math.PI/2);
   [-1,1].forEach(function(sd){var wx=sd*AW/2;
-    box(dadoMat(AD),0.05,DADO,AD,wx-sd*0.025,DADO/2,az);box(dark,0.09,0.06,AD,wx-sd*0.045,DADO+0.03,az);
-    box(trim,0.2,0.16,AD,wx-sd*0.1,AH-0.08,az);
-    plane(winM,2.6,5.2,wx-sd*0.012,1.25+2.6,az-0.4,sd<0?Math.PI/2:-Math.PI/2);box(trim,0.12,0.08,2.8,wx-sd*0.06,1.22,az-0.4);});
+    box(dadoMat(AD),0.05,DADO,AD,wx-sd*0.025,DADO/2,az);box(dark,0.09,0.06,AD,wx-sd*0.045,DADO+0.03,az);box(trim,0.2,0.16,AD,wx-sd*0.1,AH-0.08,az);});
+  plane(winM,2.6,5.0,-AW/2+0.012,WY0+2.5,az+0.6,Math.PI/2);box(trim,0.12,0.08,2.8,-AW/2+0.06,WY0-0.03,az+0.6);
+  (function(){var keep=W;W=AW;sunPatch(az+0.6,1.22,WY0+0.05,WY0+4.95,sunBars,0.85);W=keep;})();
   box(dadoMat(AW),AW,DADO,0.05,0,DADO/2,aEnd+0.025);box(dark,AW,0.06,0.09,0,DADO+0.03,aEnd+0.045);box(trim,AW,0.16,0.2,0,AH-0.08,aEnd+0.1);
-  plane(winM,2.4,3.4,0,3.75+1.7,aEnd+0.012,0);                           // window above the end painting
 
-  // --- light ---
-  scene.add(new THREE.AmbientLight(0xffffff,0.52));
-  scene.add(new THREE.HemisphereLight(0xffffff,0x8a7458,0.3));
-  var sun=new THREE.DirectionalLight(0xfff6e6,0.34);sun.position.set(3,10,6);scene.add(sun);
-  [12,-4].forEach(function(z){var p=new THREE.PointLight(0xfff3dd,0.14,30,1.3);p.position.set(0,H+1.4,z);scene.add(p);});
-  var ap=new THREE.PointLight(0xffffff,0.5,16,1.2);ap.position.set(0,4.6,az);scene.add(ap);
+  // --- light: sun from high on the left, so the right wall is the bright one ---
+  scene.add(new THREE.AmbientLight(0xffffff,0.5));
+  scene.add(new THREE.HemisphereLight(0xffffff,0x8a7458,0.26));
+  var sun=new THREE.DirectionalLight(0xfff1dc,0.42);sun.position.set(-9,10,4);scene.add(sun);
+  [12,-4].forEach(function(z){var p=new THREE.PointLight(0xfff3dd,0.12,30,1.3);p.position.set(0,H+1.2,z);scene.add(p);});
+  var dl=new THREE.PointLight(0xfff0d6,0.45,11,1.4);dl.position.set(-W/2+1.2,2.2,DOORZ);scene.add(dl);
+  var ap=new THREE.PointLight(0xffffff,0.4,16,1.2);ap.position.set(-1,4.6,az);scene.add(ap);
 })();
 
 /* ---------- generative placeholder art ---------- */
@@ -309,10 +349,10 @@ var PALS=[['#1f3a5f','#e8d5b0','#c8553d','#f2efe6'],['#2d4a3e','#e9c46a','#f4a26
   ['#283618','#dda15e','#fefae0','#bc6c25'],['#1d3557','#a8dadc','#f1faee','#e63946'],['#2b2d42','#ef8354','#f7ede2','#84a59d']];
 var SIZES=[[900,1100],[1200,900],[1000,1000],[900,1200],[1200,800],[1000,1250],[1200,900],[1000,1000],[1600,1000]];
 function genArt(i){
-  var w=SIZES[i][0],h=SIZES[i][1],c=document.createElement('canvas');c.width=w;c.height=h;
-  var g=c.getContext('2d'),r=mulberry(101+i*17),P=PALS[i%PALS.length],k,x,y;
+  var sty=i===N-1?8:i%8,w=SIZES[sty][0],h=SIZES[sty][1],c=document.createElement('canvas');c.width=w;c.height=h;
+  var g=c.getContext('2d'),r=mulberry(101+i*17),P=PALS[(i<8?i:i+4)%PALS.length],k,x,y;
   g.fillStyle=P[3];g.fillRect(0,0,w,h);
-  switch(i){
+  switch(sty){
   case 0: // colour bands
     var ys=[0.06,0.44,0.5,0.94];
     g.fillStyle=P[0];g.fillRect(w*.08,h*ys[0],w*.84,h*(ys[1]-ys[0]));
@@ -363,7 +403,7 @@ function defaultMeta(i){return {title:'示範作品 '+('0'+(i+1)).slice(-2),arti
 
 SLOTS.forEach(function(s,i){
   var end=s.wall==='E';
-  s.maxW=end?3.6:2.0; s.maxH=end?2.1:1.9; s.cy=end?2.3:2.25;
+  s.maxW=end?3.2:2.0; s.maxH=end?2.4:1.9; s.cy=end?2.45:2.25;
   var grp=new THREE.Group();
   if(s.wall==='L'){grp.position.set(-W/2+0.01,s.cy,s.z);grp.rotation.y=Math.PI/2;s.n=new THREE.Vector3(1,0,0);}
   else if(s.wall==='R'){grp.position.set(W/2-0.01,s.cy,s.z);grp.rotation.y=-Math.PI/2;s.n=new THREE.Vector3(-1,0,0);}
@@ -463,7 +503,7 @@ function renderCap(idx){
   if(st.slot===-1){cap.innerHTML='<div class="no">ENTRANCE</div><h2>歡迎來到展間</h2><p>向下滑動，鏡頭會帶你沿著長廊走過 '+N+' 件作品，最後穿過拱門。也可以切到「自由走動」自己逛。</p><div class="row"><button class="btn gold" data-a="start">開始導覽 ↓</button></div>';}
   else if(st.slot===-2){cap.innerHTML='<div class="no">END</div><h2>導覽結束</h2><p>回頭看看整個展廳，或是自己走一圈、把作品換成你的。</p><div class="row"><button class="btn gold" data-a="free">自由走動</button><button class="btn" data-a="top">回到入口</button></div>';}
   else{var m=works[st.slot];
-    cap.innerHTML='<div class="no">'+('0'+(st.slot+1)).slice(-2)+' / '+('0'+N).slice(-2)+'</div><h2>'+esc(m.title||'未命名')+'</h2><div class="by">'+esc([m.artist,m.year,m.medium].filter(Boolean).join(' · '))+'</div><p>'+esc(m.desc)+'</p><div class="row"><button class="btn" data-a="info" data-i="'+st.slot+'">作品資訊</button><button class="btn" data-a="edit" data-i="'+st.slot+'">更換作品</button></div>';}
+    cap.innerHTML='<div class="no">'+('0'+(st.slot+1)).slice(-2)+' / '+('0'+N).slice(-2)+'</div><h2>'+esc(m.title||'未命名')+'</h2><div class="by">'+esc([m.artist,m.year,m.medium].filter(Boolean).join(' · '))+'</div><p>'+esc(m.desc)+'</p><div class="row"><button class="btn" data-a="info" data-i="'+st.slot+'">作品資訊</button>'+(canEdit()?'<button class="btn" data-a="edit" data-i="'+st.slot+'">更換作品</button>':'')+'</div>';}
 }
 cap.addEventListener('click',function(ev){var b=ev.target.closest('button');if(!b)return;var a=b.dataset.a;
   if(a==='start')goStop(1);else if(a==='free')setMode('free');else if(a==='top')goStop(0);
@@ -566,7 +606,38 @@ function updateHots(){
 /* ---------- storage: shared (Supabase, if config.js is filled in) or this browser only ---------- */
 var CFG=window.GALLERY_CONFIG||{},SB=String(CFG.supabaseUrl||'').replace(/\/+$/,''),SBK=String(CFG.supabaseKey||''),BUCKET=CFG.bucket||'artworks';
 var REMOTE=!!(SB&&SBK);
-function sbHead(extra){var h={apikey:SBK,Authorization:'Bearer '+SBK};for(var k in extra)h[k]=extra[k];return h;}
+// Requests carry the public key; a signed-in admin's token is added for writes.
+function sbHead(extra,tok){var h={apikey:SBK};if(tok)h.Authorization='Bearer '+tok;else if(!/^sb_/.test(SBK))h.Authorization='Bearer '+SBK;for(var k in extra)h[k]=extra[k];return h;}
+var session=null,isAdmin=false;
+try{session=JSON.parse(localStorage.getItem('gallery-auth')||'null');}catch(e){session=null;}
+function saveSess(){try{if(session)localStorage.setItem('gallery-auth',JSON.stringify(session));else localStorage.removeItem('gallery-auth');}catch(e){}}
+function setSess(j){session={access_token:j.access_token,refresh_token:j.refresh_token,expires_at:Date.now()+(j.expires_in||3600)*1000};saveSess();}
+function authPost(path,body){
+  return fetch(SB+'/auth/v1/'+path,{method:'POST',headers:{apikey:SBK,'Content-Type':'application/json'},body:JSON.stringify(body)})
+    .then(function(r){return r.json().catch(function(){return {};}).then(function(j){if(!r.ok){var e=new Error(j.msg||j.error_description||j.message||('HTTP '+r.status));e.code=j.error_code||j.error||'';throw e;}return j;});});
+}
+function token(){
+  if(!session)return Promise.resolve(null);
+  if(Date.now()<session.expires_at-60000)return Promise.resolve(session.access_token);
+  return authPost('token?grant_type=refresh_token',{refresh_token:session.refresh_token}).then(function(j){setSess(j);return session.access_token;},
+    function(){signOut();return null;});
+}
+function needToken(){return token().then(function(t){if(!t)throw new Error('not signed in');return t;});}
+function signOut(){session=null;isAdmin=false;saveSess();updateAuthUI();}
+// The first account to call claim_admin becomes the only admin; afterwards it just reports whether you are that account.
+function checkAdmin(){
+  return token().then(function(t){
+    if(!t)return false;
+    return fetch(SB+'/rest/v1/rpc/claim_admin',{method:'POST',headers:sbHead({'Content-Type':'application/json'},t),body:'{}'}).then(sbOk).then(function(r){return r.json();}).then(function(v){return v===true;});
+  }).catch(function(){return false;}).then(function(v){isAdmin=v;updateAuthUI();return v;});
+}
+function canEdit(){return !REMOTE||isAdmin;}
+function updateAuthUI(){
+  var b=$('#upTop');if(!b)return;
+  if(canEdit()){b.innerHTML='＋<span> 上傳作品</span>';b.setAttribute('aria-label','上傳作品');}
+  else{b.textContent='登入';b.setAttribute('aria-label','管理員登入');}
+  capIdx=-9;
+}
 function sbOk(r){if(!r.ok)return r.text().then(function(t){throw new Error('HTTP '+r.status+' '+t.slice(0,140));});return r;}
 function dataURLtoBlob(u){var p=u.split(','),bin=atob(p[1]),n=bin.length,a=new Uint8Array(n);while(n--)a[n]=bin.charCodeAt(n);return new Blob([a],{type:'image/jpeg'});}
 function storeAll(){
@@ -580,18 +651,18 @@ function storeSave(i,v){
   var up=Promise.resolve(v.img);
   if(/^data:/.test(v.img)){
     var path='slot-'+i+'-'+Date.now()+'.jpg';
-    up=fetch(SB+'/storage/v1/object/'+BUCKET+'/'+path,{method:'POST',headers:sbHead({'Content-Type':'image/jpeg','x-upsert':'true'}),body:dataURLtoBlob(v.img)})
+    up=needToken().then(function(t){return fetch(SB+'/storage/v1/object/'+BUCKET+'/'+path,{method:'POST',headers:sbHead({'Content-Type':'image/jpeg'},t),body:dataURLtoBlob(v.img)});})
       .then(sbOk).then(function(){return SB+'/storage/v1/object/public/'+BUCKET+'/'+path;});
   }
-  return up.then(function(url){
+  return Promise.all([up,needToken()]).then(function(a){var url=a[0],tok=a[1];
     var row={slot:i,title:v.title,artist:v.artist,year:v.year,medium:v.medium,description:v.desc,image_url:url,updated_at:new Date().toISOString()};
-    return fetch(SB+'/rest/v1/works?on_conflict=slot',{method:'POST',headers:sbHead({'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'}),body:JSON.stringify(row)})
+    return fetch(SB+'/rest/v1/works?on_conflict=slot',{method:'POST',headers:sbHead({'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},tok),body:JSON.stringify(row)})
       .then(sbOk).then(function(){return {title:v.title,artist:v.artist,year:v.year,medium:v.medium,desc:v.desc,img:url};});
   });
 }
 function storeDel(i){
   if(!REMOTE)return dbDel(i);
-  return fetch(SB+'/rest/v1/works?slot=eq.'+i,{method:'DELETE',headers:sbHead()}).then(sbOk);
+  return needToken().then(function(t){return fetch(SB+'/rest/v1/works?slot=eq.'+i,{method:'DELETE',headers:sbHead({},t)});}).then(sbOk);
 }
 var dbp=null;
 function db(){
@@ -626,23 +697,48 @@ function restore(){
 }
 
 /* ---------- sheet: info + upload ---------- */
-function toast(t){hint.textContent=t;hint.style.display='block';hint.style.opacity=1;clearTimeout(hintT);hintT=setTimeout(function(){hint.style.opacity=0;hint.style.display='';},6000);}
+function toast(t){hint.textContent=t;hint.style.display='block';hint.style.top='62px';hint.style.bottom='auto';hint.style.opacity=1;clearTimeout(hintT);hintT=setTimeout(function(){hint.style.opacity=0;hint.style.display='';hint.style.top='';hint.style.bottom='';},6000);}
 var sheet=$('#sheet'),veil=$('#veil'),sheetOpen=false,pendingImg=null,lastFocus=null;
 function openSheet(i,edit){
+  if(edit&&!canEdit()){openLogin();return;}
   if(!sheetOpen)lastFocus=document.activeElement;
   sheetOpen=true;pendingImg=null;sheet.classList.add('on');veil.classList.add('on');keys={};
-  edit?renderEdit(i):renderView(i);sheet.scrollTop=0;
-  var f=sheet.querySelector(edit?'#fTitle':'.x');if(f&&!isTouch)f.focus();
+  if(i==='login')renderLogin();else edit?renderEdit(i):renderView(i);sheet.scrollTop=0;
+  var f=sheet.querySelector(i==='login'?'#lEmail':edit?'#fTitle':'.x');if(f&&!isTouch)f.focus();
 }
 function closeSheet(){sheetOpen=false;sheet.classList.remove('on');veil.classList.remove('on');if(lastFocus&&lastFocus.focus)try{lastFocus.focus({preventScroll:true});}catch(e){}}
 veil.onclick=closeSheet;
+function openLogin(){openSheet('login',false);}
+function renderLogin(){
+  sheet.innerHTML='<button class="x" aria-label="關閉">×</button><div class="no">管理員</div><h3>登入後上傳作品</h3>'+
+    '<p class="desc" style="margin-bottom:6px">所有人都能參觀；只有展間的管理員可以更換作品。</p>'+
+    '<form id="lf" novalidate><label for="lEmail">Email</label><input type="text" inputmode="email" autocomplete="username" id="lEmail" maxlength="120">'+
+    '<label for="lPass">密碼</label><input type="password" autocomplete="current-password" id="lPass" maxlength="72" style="width:100%;font:15px var(--sans);padding:10px 12px;border:1px solid #c9c2b3;border-radius:6px;background:#fff;color:#1b1916">'+
+    '<div class="err" id="lErr" role="alert"></div>'+
+    '<div class="acts"><button class="b" type="submit">登入</button><button class="b o" type="button" data-a="signup">第一次使用：建立帳號</button></div></form>'+
+    '<p class="note">第一個建立帳號並登入的人會成為這個展間唯一的管理員。建立帳號後會收到一封確認信，點信裡的連結再回來登入（連結開出來的頁面打不開是正常的）。</p>';
+  var err=$('#lErr'),form=$('#lf');
+  function val(){var e=$('#lEmail').value.trim(),p=$('#lPass').value;if(!/^\S+@\S+\.\S+$/.test(e)){err.textContent='請輸入 Email。';return null;}if(p.length<8){err.textContent='密碼至少 8 個字元。';return null;}return {email:e,password:p};}
+  function busy(b){[].forEach.call(form.querySelectorAll('button'),function(x){x.disabled=b;});}
+  function after(j){setSess(j);return checkAdmin().then(function(ok){
+    if(ok){closeSheet();toast('已登入，可以上傳與更換作品');}
+    else{signOut();busy(false);err.textContent='這個帳號不是管理員，沒有上傳權限。';}});}
+  function msg(e){var c=e.code||'';return c==='invalid_credentials'?'Email 或密碼不對。':c==='email_not_confirmed'?'請先點確認信裡的連結，再回來登入。':c==='user_already_exists'?'這個 Email 已經建立過帳號，請直接登入。':/rate|429/i.test(c+e.message)?'嘗試太多次，請稍後再試。':'沒有成功：'+e.message;}
+  form.onsubmit=function(ev){ev.preventDefault();err.textContent='';var v=val();if(!v)return;busy(true);
+    authPost('token?grant_type=password',v).then(after).catch(function(e){busy(false);err.textContent=msg(e);});};
+  sheet.onclick=function(ev){var b=ev.target.closest('button');if(!b)return;
+    if(b.classList.contains('x')){closeSheet();return;}
+    if(b.dataset.a==='signup'){err.textContent='';var v=val();if(!v)return;busy(true);
+      authPost('signup',v).then(function(j){if(j.access_token)return after(j);busy(false);err.style.color='#3b6b3b';err.textContent='確認信已寄出。點信裡的連結後，回來按「登入」。';})
+        .catch(function(e){busy(false);err.style.color='';err.textContent=msg(e);});}};
+}
 function artURL(i){var m=works[i];if(m.img)return m.img;try{return SLOTS[i].art.material.map.image.toDataURL('image/jpeg',.8);}catch(e){return '';}}
 function renderView(i){
   var m=works[i];
   sheet.innerHTML='<button class="x" aria-label="關閉">×</button><img class="pv" alt="" src="'+artURL(i)+'">'+
     '<div class="no">作品 '+('0'+(i+1)).slice(-2)+'</div><h3>'+esc(m.title||'未命名')+'</h3>'+
     '<div class="by">'+esc([m.artist,m.year].filter(Boolean).join(' · '))+'</div><div class="med">'+esc(m.medium)+'</div>'+
-    '<p class="desc">'+esc(m.desc)+'</p><div class="acts"><button class="b" data-a="edit">更換／編輯作品</button><button class="b o" data-a="close">關閉</button></div>';
+    '<p class="desc">'+esc(m.desc)+'</p><div class="acts">'+(canEdit()?'<button class="b" data-a="edit">更換／編輯作品</button>':'')+'<button class="b o" data-a="close">關閉</button></div>';
   sheet.onclick=function(ev){var b=ev.target.closest('button');if(!b)return;
     if(b.dataset.a==='edit')openSheet(i,true);else closeSheet();};
 }
@@ -660,7 +756,7 @@ function renderEdit(i){
     '<label for="fDesc">作品介紹</label><textarea id="fDesc" maxlength="600" placeholder="這件作品想說什麼？">'+esc(isDef?'':m.desc)+'</textarea>'+
     '<div class="err" id="fErr" role="alert"></div>'+
     '<div class="acts"><button class="b" type="submit">儲存並掛上</button><button class="b o" type="button" data-a="close">取消</button>'+
-    (isDef?'':'<button class="b t" type="button" data-a="reset">恢復示範作品</button>')+'</div></form>'+
+    (isDef?'':'<button class="b t" type="button" data-a="reset">恢復示範作品</button>')+(REMOTE?'<button class="b t" type="button" data-a="logout">登出</button>':'')+'</div></form>'+
     '<p class="note">'+(REMOTE?'作品會存到共用空間，所有打開這個網站的人都看得到。':'作品只存在你這台裝置的瀏覽器裡，其他人打開這個頁面看不到，換裝置或清除瀏覽資料後也會消失。')+'</p>';
   var file=$('#fFile'),drop=$('#drop'),err=$('#fErr');
   drop.onclick=function(){file.click();};
@@ -671,6 +767,7 @@ function renderEdit(i){
   $('#fSlot').onchange=function(){var keep=pendingImg;renderEdit(+this.value);if(keep){pendingImg=keep;var d=$('#drop');d.classList.add('has');d.textContent='已選擇圖片';}};
   sheet.onclick=function(ev){var b=ev.target.closest('button');if(!b)return;
     if(b.classList.contains('x')||b.dataset.a==='close')closeSheet();
+    else if(b.dataset.a==='logout'){signOut();closeSheet();toast('已登出');}
     else if(b.dataset.a==='reset'){b.disabled=true;
       storeDel(i).then(function(){works[i]=defaultMeta(i);applyImage(i,genArt(i));drawPlacard(i);afterChange(i);closeSheet();})
         .catch(function(){b.disabled=false;err.textContent='移除失敗，請稍後再試。';});}};
@@ -690,12 +787,15 @@ function renderEdit(i){
   };
 }
 function afterChange(i){buildStops();capIdx=-9;if(mode==='tour')goStop(i+1);}
-$('#upTop').onclick=function(){var i=0;for(var k=0;k<N;k++){if(!works[k].img){i=k;break;}}openSheet(i,true);};
+$('#upTop').onclick=function(){if(!canEdit()){openLogin();return;}var i=0;for(var k=0;k<N;k++){if(!works[k].img){i=k;break;}}openSheet(i,true);};
 
 /* ---------- where you can walk: hall, archway, apse ---------- */
 function walkable(x,z){
   var ax=Math.abs(x);
-  if(z>=ZB+0.8)return ax<=W/2-0.75&&z<=ZF-0.8;
+  if(z>=ZB+0.8){
+    if(Math.abs(z-DOORZ)<=DOORHW-0.45)return x>=-W/2-0.25&&x<=W/2-0.75; // step into the doorway
+    return ax<=W/2-0.75&&z<=ZF-0.8;
+  }
   if(z>=ZB-0.8)return ax<=AR-0.6;
   return ax<=AW/2-0.75&&z>=ZB-AD+0.9;
 }
@@ -737,6 +837,8 @@ window.addEventListener('resize',resize);
 window.addEventListener('orientationchange',function(){setTimeout(resize,200);});
 tourPose(0);camera.position.copy(tPos);camera.quaternion.copy(tQ);
 renderCap(0);
+updateAuthUI();
+if(REMOTE&&session)checkAdmin();
 restore().then(function(){buildStops();capIdx=-9;});
 frame();
 fade.style.opacity=0;

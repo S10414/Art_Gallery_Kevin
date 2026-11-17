@@ -1,0 +1,25 @@
+# Supabase 免費專案連續 7 天沒有請求就會被暫停。
+# 這個排程每天對資料庫發一次唯讀請求，讓專案保持啟用。
+name: Keep Supabase awake
+
+on:
+  schedule:
+    - cron: "23 4 * * *"   # 每天 12:23（台北時間）
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read from the works table
+        run: |
+          URL=$(sed -n 's/.*supabaseUrl: *"\([^"]*\)".*/\1/p' config.js)
+          KEY=$(sed -n 's/.*supabaseKey: *"\([^"]*\)".*/\1/p' config.js)
+          if [ -z "$URL" ] || [ -z "$KEY" ]; then echo "config.js has no Supabase settings; nothing to ping."; exit 0; fi
+          code=$(curl -sS -o /tmp/out -w '%{http_code}' "$URL/rest/v1/works?select=slot&limit=1" -H "apikey: $KEY")
+          echo "HTTP $code"; cat /tmp/out; echo
+          [ "$code" = "200" ]
