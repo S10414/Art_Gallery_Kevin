@@ -101,6 +101,23 @@ html.free.touch #hint{bottom:auto;top:62px}
 #sheet .drop.has{border-style:solid;border-color:#8a6a2a;color:#1b1916}
 #sheet .note{font-size:12px;color:#847d70;line-height:1.6;margin-top:16px}
 #sheet .err{color:#8b3a2a;font-size:13px;margin-top:8px;min-height:1em}
+#editor{position:fixed;inset:0;z-index:30;background:#1b1916;color:#f3efe6;display:none;flex-direction:column}
+#editor.on{display:flex}
+#editor .top{padding:14px 16px 6px}
+#editor .top b{font-family:var(--serif);font-size:22px;font-weight:600}
+#editor .top p{margin:4px 0 0;font-size:13px;line-height:1.5;color:#b8b1a3}
+#editor .stage{flex:1;min-height:160px;position:relative;overflow:hidden;touch-action:none}
+#editor canvas{position:absolute;display:block}
+#editor .ov{left:0;top:0;width:100%;height:100%;cursor:crosshair}
+#editor .ctl{padding:10px 16px 16px;display:flex;flex-direction:column;gap:10px;background:#141210;border-top:1px solid rgba(243,239,230,.14)}
+#editor .r{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+#editor .eb{border:1px solid rgba(243,239,230,.3);background:none;color:#f3efe6;font:500 13.5px var(--sans);padding:9px 14px;border-radius:999px;cursor:pointer}
+#editor .eb.on{background:#f3efe6;color:#1b1916}
+#editor .eb.go{background:#c9a45c;border-color:#c9a45c;color:#1a1509}
+#editor .eb:focus-visible{outline:2px solid #c9a45c;outline-offset:2px}
+#editor label{font-size:13px;color:#b8b1a3;display:flex;align-items:center;gap:10px;flex:1;min-width:220px}
+#editor input[type=range]{flex:1;accent-color:#c9a45c}
+#editor .tip{font-size:12px;color:#8f887b;line-height:1.5;margin:0}
 #fade{position:fixed;inset:0;background:var(--bg);z-index:20;transition:opacity 1s;pointer-events:none;display:flex;align-items:center;justify-content:center;font-family:var(--serif);font-size:20px;letter-spacing:.2em;color:var(--dim)}
 @media (prefers-reduced-motion:reduce){#cap,#sheet,#veil,#fade{transition:none}}
 </style>
@@ -131,6 +148,7 @@ html.free.touch #hint{bottom:auto;top:62px}
 
 <div id="veil"></div>
 <aside id="sheet" role="dialog" aria-modal="true" aria-label="作品資訊"></aside>
+<div id="editor" role="dialog" aria-modal="true" aria-label="校正圖片"></div>
 <div id="fade">載入展間…</div>
 
 <script src="config.js"></script>
@@ -537,6 +555,7 @@ $('#mFree').onclick=function(){setMode('free');};
 /* ---------- input ---------- */
 var keys={},joy={x:0,y:0};
 window.addEventListener('keydown',function(e){
+  if(ed){if(e.key==='Escape')ed.cancel();return;}
   if(sheetOpen){if(e.key==='Escape')closeSheet();return;}
   if(mode!=='free')return;var t=e.target.tagName;if(t==='INPUT'||t==='TEXTAREA'||t==='SELECT')return;
   keys[e.code]=true;if(/^Arrow|Space/.test(e.code))e.preventDefault();});
@@ -686,6 +705,105 @@ function fileToDataURL(file){
     return c.toDataURL('image/jpeg',0.88);
   });
 }
+function fileToImage(file){return new Promise(function(res,rej){var fr=new FileReader();fr.onload=function(){res(fr.result);};fr.onerror=function(){rej(fr.error);};fr.readAsDataURL(file);}).then(loadImg);}
+
+/* ---------- image editor: straighten (4 corners), white balance, tame glare. Nothing else is changed. ---------- */
+var ed=null;
+function applyAdj(d,gn,hl){
+  if(gn[0]===1&&gn[1]===1&&gn[2]===1&&hl===0)return;
+  var t=158,kk=hl*0.75;
+  for(var i=0;i<d.length;i+=4){
+    var r=d[i]*gn[0],g=d[i+1]*gn[1],b=d[i+2]*gn[2];
+    if(kk>0){var L=0.299*r+0.587*g+0.114*b;if(L>t){var f=(t+(L-t)*(1-kk))/L;r*=f;g*=f;b*=f;}}
+    d[i]=r;d[i+1]=g;d[i+2]=b;
+  }
+}
+function openEditor(img){
+  return new Promise(function(resolve){
+    var k=Math.min(1,2200/Math.max(img.naturalWidth,img.naturalHeight));
+    var sw=Math.max(2,Math.round(img.naturalWidth*k)),sh=Math.max(2,Math.round(img.naturalHeight*k));
+    var src=document.createElement('canvas');src.width=sw;src.height=sh;var sg=src.getContext('2d');
+    sg.fillStyle='#fff';sg.fillRect(0,0,sw,sh);sg.drawImage(img,0,0,sw,sh);
+    var S=sg.getImageData(0,0,sw,sh).data;
+    var st={pts:[[0,0],[1,0],[1,1],[0,1]],gain:[1,1,1],hl:0,pick:false};
+    var el=$('#editor');
+    el.innerHTML='<div class="top"><b>校正圖片</b><p id="edMsg"></p></div>'+
+      '<div class="stage"><canvas class="img"></canvas><canvas class="ov"></canvas></div>'+
+      '<div class="ctl"><div class="r"><button class="eb" data-a="wb">白平衡：點選白色或灰色處</button><button class="eb" data-a="reset">全部還原</button></div>'+
+      '<div class="r"><label>壓低反光<input type="range" id="edHl" min="0" max="100" value="0"></label></div>'+
+      '<p class="tip">只做裁切拉正、白平衡和壓暗過亮處，不加濾鏡。反光沒辦法真的消掉，只能壓暗；拍的時候避開光源效果最好。</p>'+
+      '<div class="r"><button class="eb go" data-a="ok">套用</button><button class="eb" data-a="cancel">取消</button></div></div>';
+    el.classList.add('on');
+    var MSG='拖曳四個角，對齊畫作的四個角落；畫框外的牆面會被裁掉並拉正。',msg=$('#edMsg');msg.textContent=MSG;
+    var stage=el.querySelector('.stage'),cv=el.querySelector('.img'),ov=el.querySelector('.ov'),wbBtn=el.querySelector('[data-a=wb]');
+    var dw=1,dh=1,ox=0,oy=0,base=null,dpr=Math.min(window.devicePixelRatio||1,2),SW=1,SH=1;
+    function paint(){if(!base)return;var out=new ImageData(new Uint8ClampedArray(base.data),dw,dh);applyAdj(out.data,st.gain,st.hl);cv.getContext('2d').putImageData(out,0,0);}
+    function X(p){return ox+p[0]*dw;}function Y(p){return oy+p[1]*dh;}
+    function drawOv(){
+      var g=ov.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,SW,SH);
+      g.beginPath();g.rect(0,0,SW,SH);g.moveTo(X(st.pts[0]),Y(st.pts[0]));for(var i=1;i<4;i++)g.lineTo(X(st.pts[i]),Y(st.pts[i]));g.closePath();
+      g.fillStyle='rgba(10,8,6,.6)';g.fill('evenodd');
+      g.beginPath();g.moveTo(X(st.pts[0]),Y(st.pts[0]));for(i=1;i<4;i++)g.lineTo(X(st.pts[i]),Y(st.pts[i]));g.closePath();
+      g.strokeStyle='#c9a45c';g.lineWidth=2;g.stroke();
+      if(!st.pick)st.pts.forEach(function(p){g.beginPath();g.arc(X(p),Y(p),11,0,7);g.fillStyle='rgba(27,25,22,.55)';g.fill();g.strokeStyle='#fff';g.lineWidth=2.5;g.stroke();});
+    }
+    function layout(){
+      var r=stage.getBoundingClientRect();SW=r.width;SH=r.height;var pad=26,sc=Math.min((SW-pad*2)/sw,(SH-pad*2)/sh);
+      dw=Math.max(2,Math.round(sw*sc));dh=Math.max(2,Math.round(sh*sc));ox=Math.round((SW-dw)/2);oy=Math.round((SH-dh)/2);
+      cv.width=dw;cv.height=dh;cv.style.left=ox+'px';cv.style.top=oy+'px';cv.style.width=dw+'px';cv.style.height=dh+'px';
+      ov.width=Math.round(SW*dpr);ov.height=Math.round(SH*dpr);
+      var g=cv.getContext('2d');g.drawImage(src,0,0,dw,dh);base=g.getImageData(0,0,dw,dh);paint();drawOv();
+    }
+    var drag=-1;
+    function pos(e){var r=stage.getBoundingClientRect();return [e.clientX-r.left,e.clientY-r.top];}
+    ov.onpointerdown=function(e){
+      var q=pos(e),u=(q[0]-ox)/dw,v=(q[1]-oy)/dh;
+      if(st.pick){
+        if(u<0||u>1||v<0||v>1)return;
+        var cx=Math.round(u*(sw-1)),cy=Math.round(v*(sh-1)),n=0,a=[0,0,0],rad=Math.max(2,Math.round(sw/250));
+        for(var y=Math.max(0,cy-rad);y<=Math.min(sh-1,cy+rad);y++)for(var x=Math.max(0,cx-rad);x<=Math.min(sw-1,cx+rad);x++){var o=(y*sw+x)*4;a[0]+=S[o];a[1]+=S[o+1];a[2]+=S[o+2];n++;}
+        var gr=(a[0]+a[1]+a[2])/3;
+        if(gr/n<24){msg.textContent='這裡太暗了，請改點比較亮的白色或灰色區域。';return;}
+        st.gain=a.map(function(c){return Math.min(2,Math.max(0.5,gr/Math.max(c,1)));});
+        st.pick=false;wbBtn.classList.remove('on');wbBtn.textContent='白平衡已校正，可再點一次重選';msg.textContent=MSG;paint();drawOv();return;
+      }
+      var best=-1,bd=34*34;st.pts.forEach(function(p,i){var d=(X(p)-q[0])*(X(p)-q[0])+(Y(p)-q[1])*(Y(p)-q[1]);if(d<bd){bd=d;best=i;}});
+      drag=best;if(drag>=0){try{ov.setPointerCapture(e.pointerId);}catch(_){ }e.preventDefault();}
+    };
+    ov.onpointermove=function(e){if(drag<0)return;var q=pos(e);st.pts[drag]=[Math.min(1,Math.max(0,(q[0]-ox)/dw)),Math.min(1,Math.max(0,(q[1]-oy)/dh))];drawOv();};
+    ov.onpointerup=ov.onpointercancel=function(){drag=-1;};
+    $('#edHl').oninput=function(){st.hl=this.value/100;paint();};
+    function close(v){el.classList.remove('on');el.innerHTML='';window.removeEventListener('resize',layout);ed=null;resolve(v);}
+    function finish(){
+      var P=st.pts.map(function(p){return [p[0]*(sw-1),p[1]*(sh-1)];});
+      function D(a,b){return Math.hypot(a[0]-b[0],a[1]-b[1]);}
+      var ow=(D(P[0],P[1])+D(P[3],P[2]))/2,oh=(D(P[0],P[3])+D(P[1],P[2]))/2;
+      if(ow<16||oh<16){msg.textContent='框選的範圍太小了，請把四個角拉開一點。';return;}
+      var sc=Math.min(1,1600/Math.max(ow,oh));ow=Math.round(ow*sc);oh=Math.round(oh*sc);
+      // square-to-quad homography: (u,v) in the output maps to a point inside the dragged quad
+      var x0=P[0][0],y0=P[0][1],x1=P[1][0],y1=P[1][1],x2=P[2][0],y2=P[2][1],x3=P[3][0],y3=P[3][1];
+      var dx1=x1-x2,dx2=x3-x2,sx=x0-x1+x2-x3,dy1=y1-y2,dy2=y3-y2,sy=y0-y1+y2-y3,den=dx1*dy2-dx2*dy1,hg=0,hh=0;
+      if(Math.abs(den)<1e-6){msg.textContent='四個角的位置不太對，請重新拖曳。';return;}
+      if(Math.abs(sx)>1e-9||Math.abs(sy)>1e-9){hg=(sx*dy2-dx2*sy)/den;hh=(dx1*sy-sx*dy1)/den;}
+      var a=x1-x0+hg*x1,b=x3-x0+hh*x3,c=x0,d=y1-y0+hg*y1,e=y3-y0+hh*y3,f=y0;
+      var out=new ImageData(ow,oh),O=out.data,i=0;
+      for(var y=0;y<oh;y++){var v=(y+0.5)/oh;for(var x=0;x<ow;x++,i+=4){var u=(x+0.5)/ow,w=hg*u+hh*v+1,fx=(a*u+b*v+c)/w,fy=(d*u+e*v+f)/w;
+        if(fx<0)fx=0;else if(fx>sw-1.001)fx=sw-1.001;if(fy<0)fy=0;else if(fy>sh-1.001)fy=sh-1.001;
+        var ix=fx|0,iy=fy|0,tx=fx-ix,ty=fy-iy,o=(iy*sw+ix)*4,o2=o+sw*4,w00=(1-tx)*(1-ty),w10=tx*(1-ty),w01=(1-tx)*ty,w11=tx*ty;
+        O[i]=S[o]*w00+S[o+4]*w10+S[o2]*w01+S[o2+4]*w11;O[i+1]=S[o+1]*w00+S[o+5]*w10+S[o2+1]*w01+S[o2+5]*w11;
+        O[i+2]=S[o+2]*w00+S[o+6]*w10+S[o2+2]*w01+S[o2+6]*w11;O[i+3]=255;}}
+      applyAdj(O,st.gain,st.hl);
+      var oc=document.createElement('canvas');oc.width=ow;oc.height=oh;oc.getContext('2d').putImageData(out,0,0);
+      close(oc.toDataURL('image/jpeg',0.9));
+    }
+    el.onclick=function(ev){var b=ev.target.closest('button');if(!b)return;var a=b.dataset.a;
+      if(a==='wb'){st.pick=!st.pick;wbBtn.classList.toggle('on',st.pick);msg.textContent=st.pick?'點一下畫面中「本來應該是白色或中性灰」的地方，例如畫紙留白或白色畫框。':MSG;drawOv();}
+      else if(a==='reset'){st.pts=[[0,0],[1,0],[1,1],[0,1]];st.gain=[1,1,1];st.hl=0;st.pick=false;$('#edHl').value=0;wbBtn.classList.remove('on');wbBtn.textContent='白平衡：點選白色或灰色處';msg.textContent=MSG;paint();drawOv();}
+      else if(a==='ok')finish();else if(a==='cancel')close(null);};
+    ed={cancel:function(){close(null);}};
+    window.addEventListener('resize',layout);layout();
+  });
+}
 function restore(){
   return storeAll().then(function(all){
     var jobs=Object.keys(all).map(function(k){var i=+k,v=all[k];if(!(i>=0&&i<N)||!v)return null;
@@ -762,7 +880,9 @@ function renderEdit(i){
   drop.onclick=function(){file.click();};
   drop.onkeydown=function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();file.click();}};
   file.onchange=function(){var f=file.files&&file.files[0];if(!f)return;err.textContent='';drop.textContent='處理中…';
-    fileToDataURL(f).then(function(u){pendingImg=u;drop.classList.add('has');drop.textContent='已選擇：'+f.name;})
+    fileToImage(f).then(openEditor).then(function(u){file.value='';
+        if(!u){drop.textContent=pendingImg?'已選擇圖片，點這裡可重選':(m.img?'已有圖片，點這裡可更換':'點這裡選擇圖片（JPG／PNG）');return;}
+        pendingImg=u;drop.classList.add('has');drop.textContent='已校正：'+f.name;})
       .catch(function(){pendingImg=null;drop.textContent='點這裡選擇圖片（JPG／PNG）';err.textContent='這個檔案讀不出來，請換一張 JPG 或 PNG。';});};
   $('#fSlot').onchange=function(){var keep=pendingImg;renderEdit(+this.value);if(keep){pendingImg=keep;var d=$('#drop');d.classList.add('has');d.textContent='已選擇圖片';}};
   sheet.onclick=function(ev){var b=ev.target.closest('button');if(!b)return;
