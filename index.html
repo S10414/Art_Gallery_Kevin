@@ -253,7 +253,7 @@ function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a
     archPath(t);t.fillStyle='rgb(255,236,205)';t.fill();
     if(withBars){t.globalCompositeOperation='destination-out';t.strokeStyle='#000';t.save();archPath(t);t.clip();bars(t,1.5);t.restore();}
     if('filter' in q)q.filter='blur(7px)';q.drawImage(tmp,12,12,360,744);return tex(cv);}
-  var KX=0.62,KZ=-0.34; // metres the light travels across (x) and along (z) the floor per metre it falls
+  var KX=1,KZ=-0.22;   // KX=1: the pool on the floor is as long as the window is tall (1:1) // metres the light travels across (x) and along (z) the floor per metre it falls
   function sunPatch(zc,hw,y0,y1,t,op){
     function P(z,yy){return [-W/2+yy*KX,0.008,z+yy*KZ];}
     var a=P(zc+hw,y0),b=P(zc-hw,y0),cc=P(zc-hw,y1),d=P(zc+hw,y1),geo=new THREE.BufferGeometry();
@@ -317,7 +317,7 @@ function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a
   function dadoRun(sd,z0,z1){var l=z1-z0,m=(z0+z1)/2,wx=sd*W/2;
     box(dadoMat(l),0.05,DADO,l,wx-sd*0.025,DADO/2,m);box(dark,0.09,0.06,l,wx-sd*0.045,DADO+0.03,m);box(dark,0.08,0.14,l,wx-sd*0.04,0.07,m);}
   dadoRun(1,ZB,ZF);dadoRun(-1,ZB,DOORZ-DOORHW-0.2);dadoRun(-1,DOORZ+DOORHW+0.2,ZF);
-  [-1,1].forEach(function(dz){var zz=DOORZ+dz*(DOORHW+0.025);box(dark,0.9,DADO,0.05,-W/2-0.4,DADO/2,zz);box(dark,0.9,0.06,0.09,-W/2-0.4,DADO+0.03,zz);}); // wainscot returns into the doorway
+  [-1,1].forEach(function(dz){var zz=DOORZ+dz*(DOORHW-0.03);box(dark,0.9,DADO,0.05,-W/2-0.4,DADO/2,zz);box(dark,0.9,0.06,0.09,-W/2-0.4,DADO+0.03,zz);}); // wainscot returns into the doorway
   [-1,1].forEach(function(sd){
     var wx=sd*W/2;
     box(trim,0.26,0.16,len,wx-sd*0.13,H-0.08,cz);box(trim,0.16,0.14,len,wx-sd*0.08,H-0.23,cz);box(trim,0.08,0.1,len,wx-sd*0.04,H-0.35,cz);
@@ -333,8 +333,7 @@ function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a
   });
   // tall windows on the sunny wall only, each with its pool of light; the doorway throws a bigger one
   WINZ.forEach(function(wz){plane(winM,WHW*2,WH,-W/2+0.012,WY0+WH/2,wz,Math.PI/2);box(trim,0.12,0.08,WHW*2+0.2,-W/2+0.06,WY0-0.03,wz);
-    sunPatch(wz,WHW*0.94,WY0+0.05,WY0+WH-0.05,sunBars,0.85);});
-  sunPatch(DOORZ,DOORHW,0,DOORSP+DOORHW,sunOpen,0.95);
+    sunPatch(wz,WHW,WY0,WY0+WH,sunBars,0.85);});
   box(trim,W,0.16,0.26,0,H-0.08,ZF-0.13);box(trim,W,0.16,0.26,0,H-0.08,ZB+0.13);
   [-1,1].forEach(function(sd){var l=(W/2-AR-0.32),x=sd*(AR+0.32+l/2);box(dadoMat(l),l,DADO,0.05,x,DADO/2,ZB+0.03);box(dark,l,0.06,0.09,x,DADO+0.03,ZB+0.05);
     var l2=(AW/2-AR-0.32),x2=sd*(AR+0.32+l2/2);box(dadoMat(l2),l2,DADO,0.05,x2,DADO/2,ZB-0.03);box(dark,l2,0.06,0.09,x2,DADO+0.03,ZB-0.05);});
@@ -349,7 +348,7 @@ function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a
   [-1,1].forEach(function(sd){var wx=sd*AW/2;
     box(dadoMat(AD),0.05,DADO,AD,wx-sd*0.025,DADO/2,az);box(dark,0.09,0.06,AD,wx-sd*0.045,DADO+0.03,az);box(trim,0.2,0.16,AD,wx-sd*0.1,AH-0.08,az);});
   plane(winM,2.6,5.0,-AW/2+0.012,WY0+2.5,az+0.6,Math.PI/2);box(trim,0.12,0.08,2.8,-AW/2+0.06,WY0-0.03,az+0.6);
-  (function(){var keep=W;W=AW;sunPatch(az+0.6,1.22,WY0+0.05,WY0+4.95,sunBars,0.85);W=keep;})();
+  (function(){var keep=W;W=AW;sunPatch(az+0.6,1.3,WY0,WY0+4.7,sunBars,0.85);W=keep;})();
   box(dadoMat(AW),AW,DADO,0.05,0,DADO/2,aEnd+0.025);box(dark,AW,0.06,0.09,0,DADO+0.03,aEnd+0.045);box(trim,AW,0.16,0.2,0,AH-0.08,aEnd+0.1);
 
   // --- light: sun from high on the left, so the right wall is the bright one ---
@@ -357,7 +356,7 @@ function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a
   scene.add(new THREE.HemisphereLight(0xffffff,0x8a7458,0.26));
   var sun=new THREE.DirectionalLight(0xfff1dc,0.42);sun.position.set(-9,10,4);scene.add(sun);
   [12,-4].forEach(function(z){var p=new THREE.PointLight(0xfff3dd,0.12,30,1.3);p.position.set(0,H+1.2,z);scene.add(p);});
-  var dl=new THREE.PointLight(0xfff0d6,0.45,11,1.4);dl.position.set(-W/2+1.2,2.2,DOORZ);scene.add(dl);
+  var dl=new THREE.PointLight(0xfff0d6,0.25,9,1.4);dl.position.set(-W/2+1.2,2.2,DOORZ);scene.add(dl);
   var ap=new THREE.PointLight(0xffffff,0.4,16,1.2);ap.position.set(-1,4.6,az);scene.add(ap);
 })();
 
